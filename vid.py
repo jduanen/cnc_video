@@ -1,61 +1,7 @@
-#!/usr/bin/env python
+#!/cygdrive/c/Python27/python
+####!/usr/bin/env python
 
 """X-Carve Microscope Tool"""
-
-####
-#
-# Left mouse click shows distances to the clicked point, and left mouse with
-#  the Shift key selects the nearest feature (of the current type of feature --
-#  e.g., line, corner, circle/arc)
-#
-####
-
-#
-# TODO:
-#  * calibration functions
-#    - geometric correction
-#    - pixel to mm conversion
-#  * feature type mode selection
-#  * feature detection
-
-# * add feature selector:
-#  - Edge
-#    * horizontal
-#    * vertical
-#  - Corner
-#    * upper/lower
-#    * left/right
-#  - Circle
-#    * center
-#    * tangent
-#      - top/bottom/left/right
-# * Add text:
-#  - Angle
-#  - Distance
-#    * X
-#    * Y
-
-# make calibration mode where fixed size object is placed on work and pixels
-#  to mm conversion is calculated
-
-# show distance to selected/nearest feature -- e.g., corner, center of circle),
-#  and show angle of selected lines
-
-# select feature mode (e.g., edge, corner, or circle) (and submode --
-#  e.g., tangent t/b/l/r, center, H/V, etc.) and highlight matching features
-#  allow mouse-click selection and then measure/display distances (in pixels)
-#  to H, to V, and to origin (as well as angles?)
-
-# Add display of feature type selection mode?
-
-# fix seg-fault/core dump on exit
-
-# allow optional camera adjustment inputs (e.g., contrast, exposure, etc.)
-
-# "v4l2-ctl --list-formats-ext"
-# 13mm camera:
-#  * 0: YUYV 4:2:2 -- 640x480@30Hz, 800x600@20Hz, 1280x960@9Hz, 1600x1200@5Hz
-#  * 1: MJPEG @ 30Hz -- 640x480, 800x600, 1280x960, 1600x1200
 
 import argparse
 import collections
@@ -69,12 +15,78 @@ import numpy as np
 import cv2
 
 
+####
+#
+# Left mouse click shows distances to the clicked point, and left mouse with
+#  the Shift key selects the nearest feature (of the current type of feature --
+#  e.g., line, corner, circle/arc)
+#
+####
+
+'''
+TODO:
+ * alignment functions
+ * calibration functions
+   - geometric correction
+   - pixel to mm conversion
+ * feature type mode selection
+ * feature detection
+
+ * add feature selector:
+   - Edge
+     * horizontal
+     * vertical
+   - Corner
+     * upper/lower
+     * left/right
+   - Circle
+     * center
+     * tangent (pt to line)
+       - top/bottom/left/right
+   - Point to Line
+ * Add text:
+   - Angle
+   - Distance
+     * X
+     * Y
+
+ * Connect with GRBL (closed loop):
+   - auto-focus (Z-axis only, stay within range, maximize sharpness)
+   - validate return to home (apply target decal to wasteboard)
+   - calculate camera offset (X & Y distance to hole center, use hint and
+     find drill hole center)
+
+ * Make calibration mode where fixed size object is placed on work and pixels
+   to mm conversion is calculated (use ruler)
+
+ * Show distance to selected/nearest feature -- e.g., corner, center of
+   circle), and show angle of selected lines
+
+ * Select feature mode (e.g., edge, corner, or circle) (and submode --
+   e.g., tangent t/b/l/r, center, H/V, etc.) and highlight matching features
+   allow mouse-click selection and then measure/display distances (in pixels)
+   to H, to V, and to origin (as well as angles?)
+
+ * Add display of feature type selection mode?
+
+ * Fix seg-fault/core dump on exit
+
+ * Allow optional camera adjustment inputs (e.g., contrast, exposure, etc.)
+'''
+
+# "v4l2-ctl --list-formats-ext"
+# 13mm camera:
+#  * 0: YUYV 4:2:2 -- 640x480@30Hz, 800x600@20Hz, 1280x960@9Hz, 1600x1200@5Hz
+#  * 1: MJPEG @ 30Hz -- 640x480, 800x600, 1280x960, 1600x1200
+
 DEBUG_MODE = False
 
 DEF_VIDEO_DEVICE = 0
 DEF_CROSSHAIR_THICKNESS = 1
 DEF_CROSSHAIR_ALPHA = 0.5
-DEF_CROSSHAIR_COLOR = (255, 255, 0)    # cyan
+##DEF_CROSSHAIR_COLOR = (255, 255, 0)  # cyan
+##DEF_CROSSHAIR_COLOR = (255, 0, 255)  # magenta
+DEF_CROSSHAIR_COLOR = (0, 255, 255)  # yellow
 DEF_HIGHLIGHT_COLOR = (0, 255, 0)    # green
 DEF_VIDEO_SIZE = (800, 600)
 
@@ -83,14 +95,14 @@ MAX_VIDEO_WIDTH = (4 * 1024)
 MAX_VIDEO_HEIGHT = (2 * 1024)
 
 # scale = 1, thickness = 1
-FONT_FACE_0 = cv2.FONT_HERSHEY_SIMPLEX        # 27 close to fixed
-FONT_FACE_1 = cv2.FONT_HERSHEY_PLAIN          # 15 small, fixed
-FONT_FACE_2 = cv2.FONT_HERSHEY_DUPLEX         # 27 close to fixed
-FONT_FACE_3 = cv2.FONT_HERSHEY_COMPLEX        # 27 light serif
-FONT_FACE_4 = cv2.FONT_HERSHEY_TRIPLEX        # 27 heavy serif
-FONT_FACE_5 = cv2.FONT_HERSHEY_COMPLEX_SMALL  # 19 small serif
-FONT_FACE_6 = cv2.FONT_HERSHEY_SCRIPT_SIMPLEX # 27 script-like
-FONT_FACE_7 = cv2.FONT_HERSHEY_SCRIPT_COMPLEX # 27 script-like
+FONT_FACE_0 = cv2.FONT_HERSHEY_SIMPLEX         # 27 close to fixed
+FONT_FACE_1 = cv2.FONT_HERSHEY_PLAIN           # 15 small, fixed
+FONT_FACE_2 = cv2.FONT_HERSHEY_DUPLEX          # 27 close to fixed
+FONT_FACE_3 = cv2.FONT_HERSHEY_COMPLEX         # 27 light serif
+FONT_FACE_4 = cv2.FONT_HERSHEY_TRIPLEX         # 27 heavy serif
+FONT_FACE_5 = cv2.FONT_HERSHEY_COMPLEX_SMALL   # 19 small serif
+FONT_FACE_6 = cv2.FONT_HERSHEY_SCRIPT_SIMPLEX  # 27 script-like
+FONT_FACE_7 = cv2.FONT_HERSHEY_SCRIPT_COMPLEX  # 27 script-like
 
 DEF_FONT_COLOR = (255, 0, 0)    # blue
 DEF_FONT_FACE = FONT_FACE_1 if (DEF_VIDEO_SIZE[0] < 512) else FONT_FACE_0
@@ -104,28 +116,44 @@ DEF_FONT_THICKNESS = 1 if (DEF_FONT_FACE == FONT_FACE_1) else 2
 # N.B. These get overridden by config file values, which are then overriden by
 #  command-line inputs.
 config = {
-    'device': DEF_VIDEO_DEVICE,
-    'size': DEF_VIDEO_SIZE,
-    'adjustments': False,
+    'device': DEF_VIDEO_DEVICE,                 # camera device name (string)
+    'size': DEF_VIDEO_SIZE,                     # image width/height (tuple)
+    'adjustments': False,                       # Enable/disable realtime input
     'crosshair': {
-        'enable': False,
-        'color': DEF_CROSSHAIR_COLOR,
-        'thickness': DEF_CROSSHAIR_THICKNESS,
-        'alpha': DEF_CROSSHAIR_ALPHA,
-        'highlightColor': DEF_HIGHLIGHT_COLOR
+        'enable': False,                        # Enable/disable (boolean)
+        'color': DEF_CROSSHAIR_COLOR,           # Color for normal (tuple)
+        'thickness': DEF_CROSSHAIR_THICKNESS,   # Thickness (pixels)
+        'alpha': DEF_CROSSHAIR_ALPHA,           # Alpha value (float)
+        'highlightColor': DEF_HIGHLIGHT_COLOR   # Color for highlighted (tuple)
     },
     'osd': {
-        'enable': True,
-        'color': DEF_FONT_COLOR,
-        'face': DEF_FONT_FACE,
-        'scale': DEF_FONT_SCALE,
-        'thickness': DEF_FONT_THICKNESS
+        'enable': True,                         # Enable/disable OSD (boolean)
+        'color': DEF_FONT_COLOR,                # Color (tuple)
+        'face': DEF_FONT_FACE,                  # Font face (string)
+        'scale': DEF_FONT_SCALE,                # Font scale (int)
+        'thickness': DEF_FONT_THICKNESS         # Font weight (int)
     }
 }
 
 
 class Crosshair(object):
+    """
+    Crosshair to be alpha-blended over video.
+
+    Horizontal and vertical parts can be (idependently) highlighted, e.g., to
+     indicate alignment with selected feature.
+    """
     def __init__(self, width, height, confVals, adjustments=False):
+        """
+        Instantiate Crosshair object.
+
+        @param width Crosshair image width in pixels
+        @param width Crosshair image height in pixels
+        @param confVals See 'crosshair' field in config dict
+        @param adjustments Enable real-time value adjustment inputs
+
+        The given width and height must be the same as that of the video image.
+        """
         self.hiH = False
         self.hiV = False
         self.width = width
@@ -148,7 +176,8 @@ class Crosshair(object):
         if self.thick < 1 or self.thick > MAX_CROSSHAIR_THICKNESS:
             sys.stderr.write("Error: invalid crosshair thickness\n")
             return False
-        if len(self.color) != 3 or min(self.color) < 0 or max(self.color) > 255:
+        if ((len(self.color) != 3) or (min(self.color) < 0) or
+                (max(self.color) > 255)):
             sys.stderr.write("Error: invalid crosshair color\n")
             return False
         if self.color == self.highlightColor:
@@ -177,20 +206,33 @@ class Crosshair(object):
         cv2.line(img, vStart, vEnd, color, self.thick)
         return img
 
-    # Turn highlight on/off for horizontal line of crosshair
     def setHighlightH(self, val):
+        """
+        Turn highlight on/off for horizontal line of crosshair.
+
+        @params val If True, highlight horizontal line of crossbar
+        """
         if not isinstance(val, bool):
             raise ValueError
         self.hiH = val
 
-    # Turn highlight on/off for vertical line of crosshair
     def setHighlightV(self, val):
+        """
+        Turn highlight on/off for vertical line of crosshair.
+
+        @params val If True, highlight vertical line of crossbar
+        """
         if not isinstance(val, bool):
             raise ValueError
         self.hiV = val
 
-    # Alpha-blend the crosshairs onto the (processed) video frame
     def overlay(self, img):
+        """
+        Alpha-blend the crosshairs onto the (processed) video frame.
+
+        @param img Image onto which crosshair is overlayed
+        @returns Input image with crosshair overlayed
+        """
         ovrly = self._render(img.copy(), self.hiH, self.hiV)
         if self.adjustments:
             self.alpha = (cv2.getTrackbarPos('alpha', 'view') / 100.0)
@@ -199,17 +241,26 @@ class Crosshair(object):
 
 
 class OnScreenDisplay(object):
+    """
+    On-screen display ????
+    <(optionally) put stuff in all four corners>
+    """
     MAX_LINES = 3
     TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT = range(4)
 
     def __init__(self, confVals):
+        """
+        Instantiate OSD object.
+
+        @param confVals See 'osd' field in config struct dict
+        """
         self.fontFace = confVals['face']
         self.fontColor = confVals['color']
         self.fontScale = confVals['scale']
         self.fontThickness = confVals['thickness']
 
         #### FIXME make lineOrigins a 2D array for all 4 corners
-        
+
         txtSize, baseline = cv2.getTextSize("M", self.fontFace, self.fontScale,
                                             self.fontThickness)
         self.txtHeight = txtSize[1]
@@ -226,6 +277,9 @@ class OnScreenDisplay(object):
         print self.lineOrigins
 
     def overlay(self, img, corner, lineNum, text):
+        """
+        ????
+        """
         if lineNum < 0 or lineNum >= OnScreenDisplay.MAX_LINES:
             raise ValueError
         bottomLeft = self.lineOrigins[corner][lineNum]
@@ -253,8 +307,8 @@ class Measurement(object):
         self.width = width    # width of image in pixels (int)
         self.height = height  # height of image in pixels (int)
 
-        self.originX = (width / 2)  # horizontal center of image in pixels (int)
-        self.originY = (height / 2) # vertical center of image in pixels (int)
+        self.originX = (width / 2)   # horiz center of image in pixels (int)
+        self.originY = (height / 2)  # vertical center of image in pixels (int)
 
         self.calib = calData
 
@@ -277,7 +331,7 @@ class Measurement(object):
     def getDistance(self):
         return self.distance
 
-    
+
 # Object that encapsulates all video processing to be done on the given
 #  input video image stream.
 class VideoProcessing(object):
@@ -373,7 +427,7 @@ class VideoProcessing(object):
 
         corners = cv2.goodFeaturesToTrack(img, 4, 0.5, 10)
         """
-        return img    
+        return img
 
     def getNearestFeature(self, x, y):
         #### TODO implement this
@@ -534,7 +588,7 @@ def main():
     if DEBUG_MODE:
         for prop, desc in vcaps.iteritems():
             print "  {0} ({1}): {2}".format(prop, desc, cap.get(prop))
-            
+
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, config['size'][0])
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config['size'][1])
 
@@ -597,7 +651,7 @@ def main():
                 # select the feature nearest to the click
                 x, y = vidProc.getNearestFeature(x, y)
             measure.setValues(x, y)
-                
+
     cv2.setMouseCallback('view', clickHandler)
 
     run = True
@@ -605,7 +659,7 @@ def main():
         # capture a frame of video from the camera
         ret, img = cap.read()
 
-        # process the video frame, adding any overlays, and return the new frame
+        # process video frame, adding any overlays, and return the new frame
         img = vidProc.processFrame(img)
         if ch['enable']:
             img = xhair.overlay(img)
