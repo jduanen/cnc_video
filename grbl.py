@@ -319,6 +319,7 @@ class XCarve(GrblDevice):
 #
 if __name__ == '__main__':
     import yaml
+    import util
 
     usage = sys.argv[0] + "[-v] [-C <confFile>] [-d <serialDevice>]"
     ap = argparse.ArgumentParser()
@@ -348,7 +349,7 @@ if __name__ == '__main__':
             sys.exit(1)
         with open(options.configFile, 'r') as ymlFile:
             confFile = yaml.load(ymlFile)
-        dictMerge(config, confFile)
+        util.dictMerge(config, confFile)
 
     TMP_FILE = "/tmp/grbl.txt"
 
