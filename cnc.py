@@ -7,10 +7,14 @@ class CNC(XCarve):
     """
     ????
     """
-    def __init__(self, serialDevice):
+    def __init__(self, config):
         """
         Instantiate CNC object.
+
+        ????
         """
+        self.config = config
+        super(CNC, self).__init__(config)
 
     def focus(self, variance):
         #### FIXME

@@ -21,9 +21,11 @@ GRBL_VERSION = "1.0cJDN-2"
 
 GRBL_PROMPT = "Grbl {0} ['$' for help]".format(GRBL_VERSION)
 
-DEF_SERIAL_DEV = "COM3"
-
 GRBL_RX_BUFFER_SIZE = 128
+
+
+#### FIXME make these be part of the config, and pass the config to the constructor
+DEF_SERIAL_DEV = "COM3"
 
 # GRBL Serial Settings: 115200, 8-N-1
 DEF_SERIAL_SPEED = 115200
@@ -31,6 +33,7 @@ DEF_SERIAL_TIMEOUT = 0.1    # serial port timeout (secs)
 DEF_SERIAL_DELAY = 0.1      # inter-character TX delay (secs)
 
 DEF_STARTUP_CMDS = ["$H", "G21", "G90"]    # home, mm, absolute mode
+
 
 #### N.B. This applies to release 0.9 and above
 
@@ -279,6 +282,7 @@ class GrblDevice(SerialDevice):
             # must use this method to write settings because writing to the
             #  EEPROM on the Arduino disables interrupts
             resp = self.sendLine(line)
+            logging.debug("Send line response: %s", resp)
             # TODO look at the response and deal with it
 
     def writeGcodes(self, gcodes):

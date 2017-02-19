@@ -1,4 +1,4 @@
-"""X-Carve Interface -- Library"""
+"""Utility Functions for the CNC_VIDEO app -- Library"""
 
 
 # Merge a new dict into an old one, updating the old one (recursively).

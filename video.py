@@ -1,15 +1,8 @@
 """X-Carve Microscope Tool Video Library"""
 
-import argparse
-import collections
 import logging
 import math
-import os
-import signal
-import sys
-import yaml
 
-import numpy as np
 import cv2
 
 

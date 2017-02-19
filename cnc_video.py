@@ -4,7 +4,6 @@
 """X-Carve Microscope Tool"""
 
 import argparse
-import collections
 import os
 import signal
 import sys
@@ -12,7 +11,9 @@ import yaml
 
 import cv2
 
-import vid
+import cnc
+import util
+import video
 
 
 ####
@@ -86,11 +87,11 @@ DEF_HIGHLIGHT_COLOR = (0, 255, 0)    # green
 DEF_VIDEO_SIZE = (800, 600)
 
 DEF_FONT_COLOR = (255, 0, 0)    # blue
-DEF_FONT_FACE = vid.FONT_FACE_1 if (DEF_VIDEO_SIZE[0] < 512) else vid.FONT_FACE_0
+DEF_FONT_FACE = video.FONT_FACE_1 if (DEF_VIDEO_SIZE[0] < 512) else video.FONT_FACE_0
 
 #### TODO calculate good defaults for fontScale and fontThickness based on default video height
 DEF_FONT_SCALE = 1
-DEF_FONT_THICKNESS = 1 if (DEF_FONT_FACE == vid.FONT_FACE_1) else 2
+DEF_FONT_THICKNESS = 1 if (DEF_FONT_FACE == video.FONT_FACE_1) else 2
 
 
 # Initialize configuration with default values here
@@ -113,6 +114,10 @@ config = {
         'face': DEF_FONT_FACE,                  # Font face (string)
         'scale': DEF_FONT_SCALE,                # Font scale (int)
         'thickness': DEF_FONT_THICKNESS         # Font weight (int)
+    },
+    'cnc': {
+        'enable': False,                        # Enable CNC machine (boolean)
+        'device': "COM4",                       # Serial device name (string)
     }
 }
 
@@ -124,10 +129,13 @@ class KeyboardInput(object):
 
     def __init__(self):
         self.mode = None
+        self.focus = False
         self.handlers = {ord('h'): self._hEdge,
                          ord('v'): self._vEdge,
                          ord('c'): self._corner,
                          ord('r'): self._circle,
+                         ord('F'): self._focusOn,
+                         ord('f'): self._focusOff,
                          27: self._reset}
 
     def input(self):
@@ -155,6 +163,14 @@ class KeyboardInput(object):
     def _circle(self):
         self.mode = KeyboardInput.CIRCLE
 
+    # enable Focus
+    def _focusOn(self,):
+        self.focus = True
+
+    # disable Focus
+    def _focusOff(self):
+        self.focus = False
+
     # reset feature mode
     def _reset(self):
         self.mode = None
@@ -171,16 +187,6 @@ def sigHandler(signum, frame):
     sys.exit(1)
 
 
-# Merge a new dict into an old one, updating the old one (recursively).
-def dictMerge(old, new):
-    for k, v in new.iteritems():
-        if (k in old and isinstance(old[k], dict) and
-            isinstance(new[k], collections.Mapping)):
-            dictMerge(old[k], new[k])
-        else:
-            old[k] = new[k]
-
-
 # Take the delta X, delta Y, and dist measurements, and overlay them at the
 #  given location on the given image.
 # Return the image with the overlay.
@@ -192,7 +198,6 @@ def drawMeasurements(img, osd, pos, dx, dy, dist):
         img = osd.overlay(img, pos, 1, "Y: {0}mm".format(round(dy, 2)))
     if dist is not None:
         img = osd.overlay(img, pos, 2, "D: {0}mm".format(round(dist, 2)))
-    return img
 
 
 #
@@ -201,7 +206,8 @@ def drawMeasurements(img, osd, pos, dx, dy, dist):
 def main():
     global config
 
-    usage = sys.argv[0] + "[-v] [-x] [-o] [-d <devIndx>] [-A] [-s (<width>, <height>)]"
+    usage = sys.argv[0] + "[-v] [-x] [-o] [-d <devIndx>] [-A] "
+    usage += "[-s (<width>, <height>)] [-c <serialDev>]"
     ap = argparse.ArgumentParser()
     ap.add_argument(
         '-F', '--font', action='store', type=int, help="font face (number)")
@@ -215,8 +221,8 @@ def main():
         '-t', '--thickness', action='store', type=int,
         help="crosshair thickness")
     ap.add_argument(
-        '-c', '--color', action='store', type=str,
-        help="crosshair color list -- 'B,G,R'")
+        '-c', '--cnc', action='store', type=str,
+        help="name of CNC's serial port -- 'COM3', '/dev/tty1', etc.")
     ap.add_argument(
         '-d', '--deviceIndex', action='store', type=int,
         help="video input device index")
@@ -246,7 +252,14 @@ def main():
             sys.exit(1)
         with open(options.configFile, 'r') as ymlFile:
             confFile = yaml.load(ymlFile)
-        dictMerge(config, confFile)
+        util.dictMerge(config, confFile)
+
+    if 'crosshair' not in config:
+        config['crosshair'] = {'enable': False}
+    if 'osd' not in config:
+        config['osd'] = {'enable': False}
+    if 'cnc' not in config:
+        config['cnc'] = {'enable': False}
 
     if options.deviceIndex:
         config['device'] = options.deviceIndex
@@ -262,16 +275,17 @@ def main():
         config['crosshair']['alpha'] = options.alpha
     if options.thickness:
         config['crosshair']['thickness'] = options.thickness
-    if options.color:
-        config['crosshair']['color'] = [int(x) for x in options.color.split(",")]
     if options.font:
         config['osd']['face'] = options.font
+    if options.cnc:
+        config['cnc']['enable'] = True
+        config['cnc']['device'] = options.cnc
 
     # Aliases for OSD locations
-    TL = vid.OnScreenDisplay.TOP_LEFT
-    TR = vid.OnScreenDisplay.TOP_RIGHT
-    BL = vid.OnScreenDisplay.BOTTOM_LEFT
-    BR = vid.OnScreenDisplay.BOTTOM_RIGHT
+    TL = video.OnScreenDisplay.TOP_LEFT
+    TR = video.OnScreenDisplay.TOP_RIGHT
+    BL = video.OnScreenDisplay.BOTTOM_LEFT
+    BR = video.OnScreenDisplay.BOTTOM_RIGHT
 
     cv2.namedWindow('view')
     if config['adjustments']:
@@ -302,13 +316,17 @@ def main():
 
     ch = config['crosshair']
     if ch['enable']:
-        xhair = vid.Crosshair(vidWidth, vidHeight, ch, config['adjustments'])
+        xhair = video.Crosshair(vidWidth, vidHeight, ch, config['adjustments'])
 
     o = config['osd']
     if o['enable']:
-        osd = vid.OnScreenDisplay(config)
+        osd = video.OnScreenDisplay(config)
     else:
         osd = None
+
+    c = config['cnc']
+    if c['enable']:
+        mach = cnc.CNC(config)
 
     if options.verbose:
         sys.stdout.write("    Video Device Index:  {0}\n".
@@ -343,6 +361,13 @@ def main():
                              format(ch['highlightColor']))
         else:
             sys.stdout.write("Disabled\n")
+        sys.stdout.write("    X-Carve:             ")
+        if c['enable']:
+            sys.stdout.write("Enabled")
+            sys.stdout.write("        Serial Port:         {0}\n".
+                             format(x['device']))
+        else:
+            sys.stdout.write("Disabled\n")
         sys.stdout.write("    Realtime Controls ")
         if config['adjustments']:
             sys.stdout.write("Enabled\n")
@@ -351,12 +376,12 @@ def main():
         sys.stdout.write("\n")
         sys.stdout.flush()
 
-    vidProc = vid.VideoProcessing()
+    vidProc = video.VideoProcessing()
     kbd = KeyboardInput()
 
     #### TODO get calibration data
     cal = None
-    measure = vid.Measurement(vidWidth, vidHeight, cal)
+    measure = video.Measurement(vidWidth, vidHeight, cal)
 
     def clickHandler(event, x, y, flags, param):
         if flags & cv2.EVENT_LBUTTONDOWN:
@@ -372,19 +397,32 @@ def main():
         # capture a frame of video from the camera
         ret, img = cap.read()
 
-        # process video frame, adding any overlays, and return the new frame
-        img = vidProc.processFrame(img)
+        # process video frame
+        vpOut = vidProc.processFrame(img)
+        ##print("VP_OUT: {0}".format(vpOut))
+
+        # add overlays to image
         if ch['enable']:
-            img = xhair.overlay(img)
+            xhair.overlay(img)
         if o['enable']:
             dX, dY, dist = measure.getValues()
-            img = drawMeasurements(img, osd, TL, dX, dY, dist)
+            drawMeasurements(img, osd, TL, dX, dY, dist)
             if kbd.mode is not None:
                 text = "MODE: " + KeyboardInput.FEATURES[kbd.mode]
                 img = osd.overlay(img, TR, 0, text)
+            if kbd.focus:
+                text = "{0}: {1:.2f}".format("FOCUS", vpOut['variance'])
+                img = osd.overlay(img, BL, 0, text)
 
         # display the processed and overlayed video frame
         cv2.imshow('view', img)
+
+        if c['enable']:
+            # perform the desired CNC motions
+            cncIn = {}
+            cncOut = mach.focus(cncIn)
+            if cncOut:
+                print("CNC_OUT: {0}".format(cncOut))
 
         # process keyboard input
         run = kbd.input()
