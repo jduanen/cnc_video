@@ -123,13 +123,11 @@ class Crosshair(object):
         Alpha-blend the crosshairs onto the (processed) video frame.
 
         @param img Image onto which crosshair is overlayed
-        @returns Input image with crosshair overlayed
         """
         ovrly = self._render(img.copy(), self.hiH, self.hiV)
         if self.adjustments:
             self.alpha = (cv2.getTrackbarPos('alpha', 'view') / 100.0)
         cv2.addWeighted(ovrly, self.alpha, img, (1.0 - self.alpha), 0, img)
-        return img
 
 
 class OnScreenDisplay(object):
@@ -165,7 +163,6 @@ class OnScreenDisplay(object):
         yOffset = 5
         xLeftOffset = 5
         xRightOffset = (imgWidth - (self.maxStrWidth + 1))
-        print("RO: {0}, {1}".format(imgWidth, self.maxStrWidth))
         lineSpacing = int(self.txtHeight / 3.0) + 3
         lineHeight = (self.txtHeight + lineSpacing)
         self.lineOrigins = [
@@ -190,7 +187,6 @@ class OnScreenDisplay(object):
                 (xRightOffset, imgHeight - (yOffset + (lineHeight * 2)))
             ]
         ]
-        print(self.lineOrigins)
 
     def overlay(self, img, corner, lineNum, text):
         """
@@ -265,6 +261,7 @@ class VideoProcessing(object):
 
     def processFrame(self, img):
         #### TODO run img through camera calibration correction matrix
+        output = {}
 
         #### Detection Pipeline:
         ####  * cvt2gray
@@ -273,6 +270,10 @@ class VideoProcessing(object):
         ####  * cvCanny
         ####  * cvFindContours
         ####  * cvApproxPoly
+
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        output['variance'] = cv2.Laplacian(gray, cv2.CV_64F).var()
 
         """
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -352,7 +353,7 @@ class VideoProcessing(object):
 
         corners = cv2.goodFeaturesToTrack(img, 4, 0.5, 10)
         """
-        return img
+        return output
 
     def getNearestFeature(self, x, y):
         #### TODO implement this
