@@ -92,13 +92,6 @@ DEF_FONT_FACE = vid.FONT_FACE_1 if (DEF_VIDEO_SIZE[0] < 512) else vid.FONT_FACE_
 DEF_FONT_SCALE = 1
 DEF_FONT_THICKNESS = 1 if (DEF_FONT_FACE == vid.FONT_FACE_1) else 2
 
-# Map strings to OSD locations
-OSD_LOCATIONS = {
-    "TL": vid.OnScreenDisplay.TOP_LEFT,
-    "TR": vid.OnScreenDisplay.TOP_RIGHT,
-    "BL": vid.OnScreenDisplay.BOTTOM_LEFT,
-    "BR": vid.OnScreenDisplay.BOTTOM_RIGHT
-}
 
 # Initialize configuration with default values here
 # N.B. These get overridden by config file values, which are then overriden by
@@ -193,16 +186,12 @@ def dictMerge(old, new):
 # Return the image with the overlay.
 # Positions: "TL"=top left, "TR"=top right, "BL"=bottom left, "BR"=bottom right
 def drawMeasurements(img, osd, pos, dx, dy, dist):
-    if pos not in OSD_LOCATIONS:
-        sys.stderr.write("Error: invalid OSD position spec '{0}'".format(pos))
-        raise ValueError
-    loc = OSD_LOCATIONS[pos]
     if dx is not None:
-        img = osd.overlay(img, loc, 0, "X: {0}mm".format(round(dx, 2)))
+        img = osd.overlay(img, pos, 0, "X: {0}mm".format(round(dx, 2)))
     if dy is not None:
-        img = osd.overlay(img, loc, 1, "Y: {0}mm".format(round(dy, 2)))
+        img = osd.overlay(img, pos, 1, "Y: {0}mm".format(round(dy, 2)))
     if dist is not None:
-        img = osd.overlay(img, loc, 2, "D: {0}mm".format(round(dist, 2)))
+        img = osd.overlay(img, pos, 2, "D: {0}mm".format(round(dist, 2)))
     return img
 
 
@@ -278,6 +267,12 @@ def main():
     if options.font:
         config['osd']['face'] = options.font
 
+    # Aliases for OSD locations
+    TL = vid.OnScreenDisplay.TOP_LEFT
+    TR = vid.OnScreenDisplay.TOP_RIGHT
+    BL = vid.OnScreenDisplay.BOTTOM_LEFT
+    BR = vid.OnScreenDisplay.BOTTOM_RIGHT
+
     cv2.namedWindow('view')
     if config['adjustments']:
         if config['crosshair']['enable']:
@@ -301,13 +296,17 @@ def main():
     vidRate = cap.get(cv2.CAP_PROP_FPS)
     vidFormat = cap.get(cv2.CAP_PROP_FOURCC)
 
+    # update the config with the actual width/height of the image
+    config['imgWidth'] = vidWidth
+    config['imgHeight'] = vidHeight
+
     ch = config['crosshair']
     if ch['enable']:
         xhair = vid.Crosshair(vidWidth, vidHeight, ch, config['adjustments'])
 
     o = config['osd']
     if o['enable']:
-        osd = vid.OnScreenDisplay(o)
+        osd = vid.OnScreenDisplay(config)
     else:
         osd = None
 
@@ -379,10 +378,10 @@ def main():
             img = xhair.overlay(img)
         if o['enable']:
             dX, dY, dist = measure.getValues()
-            img = drawMeasurements(img, osd, "TL", dX, dY, dist)
+            img = drawMeasurements(img, osd, TL, dX, dY, dist)
             if kbd.mode is not None:
-                img = osd.overlay(img, vid.OnScreenDisplay.TOP_RIGHT, 0,
-                                  KeyboardInput.FEATURES[kbd.mode])
+                text = "MODE: " + KeyboardInput.FEATURES[kbd.mode]
+                img = osd.overlay(img, TR, 0, text)
 
         # display the processed and overlayed video frame
         cv2.imshow('view', img)
