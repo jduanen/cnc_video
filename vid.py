@@ -2,6 +2,7 @@
 
 import argparse
 import collections
+import logging
 import math
 import os
 import signal
@@ -59,22 +60,22 @@ class Crosshair(object):
 
     def _validate(self):
         if self.width < 0 or self.width > MAX_VIDEO_WIDTH:
-            sys.stderr.write("Error: invalid crosshair image width\n")
+            logging.error("Invalid crosshair image width: %d", self.width)
             return False
         if self.height < 0 or self.height > MAX_VIDEO_HEIGHT:
-            sys.stderr.write("Error: invalid crosshair image height\n")
+            logging.error("Invalid crosshair image height: %d", self.height)
             return False
         if self.thick < 1 or self.thick > MAX_CROSSHAIR_THICKNESS:
-            sys.stderr.write("Error: invalid crosshair thickness\n")
+            logging.error("Invalid crosshair thickness: %d", self.thick)
             return False
         if ((len(self.color) != 3) or (min(self.color) < 0) or
                 (max(self.color) > 255)):
-            sys.stderr.write("Error: invalid crosshair color\n")
+            logging.error("Invalid crosshair color: %s", self.color)
             return False
         if self.color == self.highlightColor:
-            sys.stderr.write("Warning: crosshair and highlight colors are the same")
+            logging.warning("Crosshair and highlight colors are the same")
         if self.alpha < 0.0 or self.alpha > 1.0:
-            sys.stderr.write("Error: invalid crosshair alpha\n")
+            logging.error("Invalid crosshair alpha: %f", self.alpha)
             return False
         return True
 
@@ -137,55 +138,88 @@ class OnScreenDisplay(object):
     <(optionally) put stuff in all four corners>
     """
     MAX_LINES = 3
+    MAX_CHARS = 10
     TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT = range(4)
 
-    def __init__(self, confVals):
+    def __init__(self, config):
         """
         Instantiate OSD object.
 
         @param confVals See 'osd' field in config struct dict
         """
+        confVals = config['osd']
         self.fontFace = confVals['face']
         self.fontColor = confVals['color']
         self.fontScale = confVals['scale']
         self.fontThickness = confVals['thickness']
 
-        #### FIXME make lineOrigins a 2D array for all 4 corners
-
-        txtSize, baseline = cv2.getTextSize("M", self.fontFace, self.fontScale,
+        txtSize, baseline = cv2.getTextSize("M" * OnScreenDisplay.MAX_CHARS,
+                                            self.fontFace, self.fontScale,
                                             self.fontThickness)
         self.txtHeight = txtSize[1]
+        self.maxStrWidth = txtSize[0]
 
-        topOffset = 5
+        imgWidth = config['imgWidth']
+        imgHeight = config['imgHeight']
+
+        yOffset = 5
+        xLeftOffset = 5
+        xRightOffset = (imgWidth - (self.maxStrWidth + 1))
+        print("RO: {0}, {1}".format(imgWidth, self.maxStrWidth))
         lineSpacing = int(self.txtHeight / 3.0) + 3
-        origin = (5, (topOffset + self.txtHeight))
-
-        self.lineOrigins = [origin]
-
-        for line in range(OnScreenDisplay.MAX_LINES - 1):
-            nextY = origin[1] + ((self.txtHeight + lineSpacing) * (line + 1))
-            self.lineOrigins.append((origin[0], nextY))
+        lineHeight = (self.txtHeight + lineSpacing)
+        self.lineOrigins = [
+            [   # TOP_LEFT
+                (xLeftOffset, yOffset + self.txtHeight),
+                (xLeftOffset, yOffset + (lineHeight * 2)),
+                (xLeftOffset, yOffset + (lineHeight * 3))
+            ],
+            [   # TOP_RIGHT
+                (xRightOffset, yOffset + self.txtHeight),
+                (xRightOffset, yOffset + (lineHeight * 2)),
+                (xRightOffset, yOffset + (lineHeight * 3))
+            ],
+            [   # BOTTOM_LEFT
+                (xLeftOffset, imgHeight - yOffset),
+                (xLeftOffset, imgHeight - (yOffset + lineHeight)),
+                (xLeftOffset, imgHeight - (yOffset + (lineHeight * 2)))
+            ],
+            [   # BOTTOM_RIGHT
+                (xRightOffset, imgHeight - yOffset),
+                (xRightOffset, imgHeight - (yOffset + lineHeight)),
+                (xRightOffset, imgHeight - (yOffset + (lineHeight * 2)))
+            ]
+        ]
         print(self.lineOrigins)
 
     def overlay(self, img, corner, lineNum, text):
         """
-        ????
+        Overlay text on image at given location.
         """
+        if corner < OnScreenDisplay.TOP_LEFT or \
+           corner > OnScreenDisplay.BOTTOM_RIGHT:
+            logging.error("Invalid OSD location value: %d", corner)
+            raise ValueError
+
+        origTextLen = len(text)
+        (txtWidth, txtHeight), b = cv2.getTextSize(text, self.fontFace,
+                                                   self.fontScale,
+                                                   self.fontThickness)
+        while (txtWidth > self.maxStrWidth):
+            text = text[:-1]
+            (txtWidth, txtHeight), b = cv2.getTextSize(text, self.fontFace,
+                                                       self.fontScale,
+                                                       self.fontThickness)
+        if len(text) != origTextLen:
+            logging.warning("Text too long; truncated")
+
         if lineNum < 0 or lineNum >= OnScreenDisplay.MAX_LINES:
+            logging.error("Invalid OSD line number: %d", lineNum)
             raise ValueError
+
         bottomLeft = self.lineOrigins[corner][lineNum]
-        if corner == OnScreenDisplay.TOP_LEFT:
-            cv2.putText(img, text, bottomLeft, self.fontFace, self.fontScale,
-                        self.fontColor, self.fontThickness, cv2.LINE_AA, False)
-        elif corner == OnScreenDisplay.TOP_RIGHT:
-            cv2.putText(img, text, bottomLeft, self.fontFace, self.fontScale,
-                        self.fontColor, self.fontThickness, cv2.LINE_AA, False)
-        elif corner == OnScreenDisplay.BOTTOM_LEFT:
-            print "BL"
-        elif corner == OnScreenDisplay.BOTTOM_RIGHT:
-            print "BR"
-        else:
-            raise ValueError
+        cv2.putText(img, text, bottomLeft, self.fontFace, self.fontScale,
+                    self.fontColor, self.fontThickness, cv2.LINE_AA, False)
         return img
 
 
@@ -329,4 +363,4 @@ class VideoProcessing(object):
 # TEST
 #
 if __name__ == '__main__':
-    print "TBD"
+    print("TBD")
