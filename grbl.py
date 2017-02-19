@@ -1,8 +1,7 @@
-#
-
-"""GRBL Interface for X-Carve -- Library"""
+"""X-Carve GRBL Device Interface -- Library"""
 
 import argparse
+import json
 import logging
 import os
 import re
@@ -227,9 +226,15 @@ class GrblDevice(SerialDevice):
         time.sleep(1.0)         # wait for the Arduino to wake up
         self.dev.flushInput()
 
+        # reset the GRBL device
+        self.sendResetGrbl()
+
         # get the GRBL settings
         resp = self.sendLine("$")
         self.settings = GrblDevice._parseGrblSettings(resp)
+        if not self.settings:
+            logging.debug("Unable to get settings from device")
+            raise RuntimeError
 
         # issue the startup commands
         for line in startupCmds:
@@ -295,10 +300,26 @@ class GrblDevice(SerialDevice):
         logging.debug("Write GCODE responses: %s", responses)
 
 
+class XCarve(GrblDevice):
+    def __init__(self, serialDev):
+        """
+        ????
+
+        @param serialDev ?
+        """
+        super(XCarve, self).__init__(serialDev)
+
+    def focus(self, variance):
+        #### FIXME
+        return variance
+
+
 #
 # TEST
 #
 if __name__ == '__main__':
+    import yaml
+
     usage = sys.argv[0] + "[-v] [-C <confFile>] [-d <serialDevice>]"
     ap = argparse.ArgumentParser()
     ap.add_argument(
@@ -337,9 +358,9 @@ if __name__ == '__main__':
 
     grbl = GrblDevice(options.device)
 
-    grbl.sendResetGrbl()
+    settings = grbl.getSettings()
+    print("Settings:")
+    json.dump(settings, sys.stdout, indent=4, sort_keys=True)
 
     gcodes = ["G1", "G2", "G3"]
     grbl.writeGcodes(gcodes)
-
-    print "DONE"
