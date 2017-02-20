@@ -15,10 +15,12 @@ class CNC(XCarve):
         """
         self.config = config
         super(CNC, self).__init__(config)
+        self.maxFocus = (None, None)  # (focusVal, zPos)
+        self.focus = (None, None)     # (focusVal, zPos)
 
-    def focus(self, variance):
-        #### FIXME
-        return variance
+    def focus(self, focusVal):
+        x, y, z = self.getPosition()
+        return None
 
 
 #

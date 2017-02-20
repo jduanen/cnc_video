@@ -419,10 +419,11 @@ def main():
 
         if c['enable']:
             # perform the desired CNC motions
-            cncIn = {}
-            cncOut = mach.focus(cncIn)
-            if cncOut:
-                print("CNC_OUT: {0}".format(cncOut))
+            if kbd.focus:
+                cncIn = {'variance': vpOut['variance']}
+                cncOut = mach.focus(cncIn)
+                if cncOut:
+                    print("CNC_OUT: {0}".format(cncOut))
 
         # process keyboard input
         run = kbd.input()

@@ -36,6 +36,13 @@ class XCarve(GrblDevice):
         #### FIXME
         return
 
+    def getPosition(self):
+        #### FIXME
+        status = self.getCurrentStatus()
+        print("Status: {0}".format(status))
+        x = y = z = None
+        return x, y, z
+
 
 #
 # TEST
